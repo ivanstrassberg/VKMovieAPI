@@ -26,6 +26,7 @@ type Storage interface {
 	DeleteMovieData(*UpdateMovieReq) error
 
 	CreateUser(*User) error
+	GetUserById(string, string) (*User, error)
 }
 
 type PostgresStore struct {
@@ -560,4 +561,29 @@ func (s *PostgresStore) movieExists(movieID int) (bool, error) {
 		return false, fmt.Errorf("error checking movie existence: %w", err)
 	}
 	return count > 0, nil
+}
+
+/////
+
+func (s *PostgresStore) GetUserById(username, password string) (*User, error) {
+
+	rows, err := s.db.Query("select	* from user where username = $1 and password = $2", username, password)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		return scanIntoAccount(rows)
+	}
+	return nil, fmt.Errorf("account %s not found", username)
+}
+
+func scanIntoAccount(rows *sql.Rows) (*User, error) {
+	user := new(User)
+	err := rows.Scan(
+		&user.ID,
+		&user.Username,
+		&user.Password,
+		&user.IsAdmin)
+
+	return user, err
 }

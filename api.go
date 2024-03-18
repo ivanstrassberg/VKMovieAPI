@@ -6,6 +6,9 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt"
 )
 
 type APIServer struct {
@@ -31,7 +34,6 @@ func (s *APIServer) Run() {
 	mux.HandleFunc("/movie/sort", makeHTTPHandleFunc(s.handleMovie))
 	mux.HandleFunc("/movie/search/{byName}", makeHTTPHandleFunc(s.handleMovie))
 	mux.HandleFunc("/movie/sort/{sortParam}/{order}", makeHTTPHandleFunc(s.handleMovie))
-	// mux.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleLogin))
 
 	log.Println("JSON API server running on port", s.listenAddr)
 
@@ -173,30 +175,30 @@ func (s *APIServer) handleUpdateMovie(w http.ResponseWriter, r *http.Request) er
 
 }
 
-func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
-	if r.Method == "GET" {
-		userLoginReq := new(LoginRequest)
-		if err := json.NewDecoder(r.Body).Decode(userLoginReq); err != nil {
-			return err
-		}
+// func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
+// 	if r.Method == "GET" {
+// 		userLoginReq := new(LoginRequest)
+// 		if err := json.NewDecoder(r.Body).Decode(userLoginReq); err != nil {
+// 			return err
+// 		}
 
-		return WriteJSON(w, http.StatusOK, userLoginReq)
-	}
-	if r.Method == "POST" {
-		userLoginReq := new(LoginRequest)
-		if err := json.NewDecoder(r.Body).Decode(userLoginReq); err != nil {
-			return err
-		}
-		user := NewUser(userLoginReq.Username, userLoginReq.Password)
-		if err := s.store.CreateUser(user); err != nil {
-			return err
-		}
+// 		return WriteJSON(w, http.StatusOK, userLoginReq)
+// 	}
+// 	if r.Method == "POST" {
+// 		userLoginReq := new(LoginRequest)
+// 		if err := json.NewDecoder(r.Body).Decode(userLoginReq); err != nil {
+// 			return err
+// 		}
+// 		user := NewUser(userLoginReq.Username, userLoginReq.Password)
+// 		if err := s.store.CreateUser(user); err != nil {
+// 			return err
+// 		}
 
-		return WriteJSON(w, http.StatusOK, userLoginReq)
-	}
-	return WriteJSON(w, http.StatusOK, ApiError{Error: "method not supported"})
+// 		return WriteJSON(w, http.StatusOK, userLoginReq)
+// 	}
+// 	return WriteJSON(w, http.StatusOK, ApiError{Error: "method not supported"})
 
-}
+// }
 
 func (s *APIServer) handleActor(w http.ResponseWriter, r *http.Request) error {
 
@@ -365,4 +367,129 @@ func isEndpointInPath(parts []string, endpoint string) bool {
 		}
 	}
 	return false
+}
+
+///////
+
+// Initialize JWT with a secret key
+var jwtInstance = JWT{SecretKey: "your_secret_key"}
+
+func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
+
+	if r.Method == "POST" {
+		userLoginReq := new(LoginRequest)
+		if err := json.NewDecoder(r.Body).Decode(userLoginReq); err != nil {
+			return err
+		}
+		user := NewUser(userLoginReq.Username, userLoginReq.Password)
+		if err := s.store.CreateUser(user); err != nil {
+			return err
+		}
+
+		return WriteJSON(w, http.StatusOK, userLoginReq)
+	} else {
+		var loginReq LoginRequest
+		err := json.NewDecoder(r.Body).Decode(&loginReq)
+		if err != nil {
+
+			return WriteJSON(w, http.StatusForbidden, "no")
+		}
+
+		user, err := s.authenticateUser(loginReq.Username, loginReq.Password)
+		if err != nil {
+			WriteJSON(w, http.StatusForbidden, "no")
+		}
+
+		tokenString, err := generateToken(user)
+		if err != nil {
+			WriteJSON(w, http.StatusForbidden, "no")
+		}
+
+		// Return the token to the client
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
+	}
+	return nil
+}
+
+func (s *APIServer) authenticateUser(username, password string) (*User, error) {
+	user := new(User)
+	user, err := s.store.GetUserById(user.Username, user.Password)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+// generateToken generates JWT token for the user
+func generateToken(user *User) (string, error) {
+	token := jwt.New(jwt.SigningMethodHS256)
+
+	// Set claims
+	claims := token.Claims.(jwt.MapClaims)
+	claims["id"] = user.ID
+	claims["username"] = user.Username
+	claims["isAdmin"] = user.IsAdmin
+	claims["exp"] = time.Now().Add(time.Minute * 24).Unix() // Token expires in 24 hours
+
+	// Generate encoded token and return it
+	tokenString, err := token.SignedString([]byte(jwtInstance.SecretKey))
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
+}
+
+func withJWTauth(handlerFunc http.HandlerFunc, s Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("calling JWT middleware")
+
+		// Extract JWT token from the request header
+		tokenString := r.Header.Get("x-jwt-token")
+		if tokenString == "" {
+			WriteJSON(w, http.StatusForbidden, "no")
+			return
+		}
+
+		// Validate the JWT token
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			// Return the secret key for validation
+			return []byte(jwtInstance.SecretKey), nil
+		})
+		if err != nil {
+			WriteJSON(w, http.StatusForbidden, "no")
+			return
+		}
+
+		// Check if the token is valid
+		if !token.Valid {
+			WriteJSON(w, http.StatusForbidden, "no")
+			return
+		}
+
+		// Extract user ID from token claims
+
+		username := token.Claims.(jwt.MapClaims)["username"].(string)
+		password := token.Claims.(jwt.MapClaims)["password"].(string)
+
+		// Retrieve account information from storage
+		user, err := s.GetUserById(username, password)
+		if err != nil {
+			WriteJSON(w, http.StatusForbidden, "no")
+			return
+		}
+
+		// Check if account number matches the claim
+		claims := token.Claims.(jwt.MapClaims)
+		if int64(user.ID) != int64(claims["id"].(float64)) {
+			WriteJSON(w, http.StatusForbidden, "no")
+			return
+		}
+
+		// Call the actual handler function if authentication and authorization succeed
+		handlerFunc(w, r)
+	}
 }

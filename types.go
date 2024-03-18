@@ -1,6 +1,8 @@
 package main
 
-import "time"
+import (
+	"time"
+)
 
 type DeleteActorReq struct {
 	ID        int64  `json:"id"`
@@ -123,4 +125,8 @@ func NewUser(username string, password string) *User {
 		Username: username,
 		Password: password,
 	}
+}
+
+type JWT struct {
+	SecretKey string
 }
