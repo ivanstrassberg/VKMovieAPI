@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 )
 
 type APIServer struct {
@@ -25,6 +26,9 @@ func (s *APIServer) Run() {
 	mux.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin))
 	mux.HandleFunc("/actor", makeHTTPHandleFunc(s.handleActor))
 	mux.HandleFunc("/movie", makeHTTPHandleFunc(s.handleMovie))
+	mux.HandleFunc("/movie/sort", makeHTTPHandleFunc(s.handleMovie))
+	mux.HandleFunc("/movie/search/{byName}", makeHTTPHandleFunc(s.handleMovie))
+	mux.HandleFunc("/movie/sort/{sortParam}/{order}", makeHTTPHandleFunc(s.handleMovie))
 	// mux.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleLogin))
 
 	log.Println("JSON API server running on port", s.listenAddr)
@@ -37,7 +41,46 @@ func (s *APIServer) Run() {
 func (s *APIServer) handleMovie(w http.ResponseWriter, r *http.Request) error {
 
 	if r.Method == "GET" {
-		return s.handleGetMovies(w, r)
+		path := r.URL.Path
+		parts := strings.Split(path, "/")
+		keyWord := parts[len(parts)-1]
+		keyWordSortParam := parts[len(parts)-2]
+		if len(parts) == 1 {
+			return s.handleGetSortedMovies(w, r, "", "")
+		}
+		if isEndpointInPath(parts, "search") {
+			if keyWord != "" {
+				fmt.Println(keyWord)
+				return s.handleMovieSearch(w, r, keyWord)
+			}
+			return WriteJSON(w, http.StatusBadRequest, ApiError{Error: "empty search"})
+		}
+		if isEndpointInPath(parts, "sort") {
+			if keyWord != "" && (isEndpointInPath(parts, "asc") || isEndpointInPath(parts, "desc")) {
+				if keyWordSortParam != "" && (isEndpointInPath(parts, "title") || isEndpointInPath(parts, "rating") || isEndpointInPath(parts, "release_date")) {
+					return s.handleGetSortedMovies(w, r, keyWordSortParam, keyWord)
+				}
+
+			}
+			return s.handleGetMoviesDefault(w, r, " ", " ")
+		}
+		return WriteJSON(w, http.StatusBadRequest, ApiError{Error: "something went wrong during sorting"})
+
+		// return s.handleGetSortedMovies(w, r, "", "")
+		// endpoint, err := getEndpoint(r)
+		// fmt.Println(endpoint)
+		// if err != nil {
+		// 	return err
+		// }
+		// switch endpoint {
+		// case "byMovieName":
+		// 	return s.handleGetMovies(w, r)
+		// case "byActorName":
+		// 	return s.handleGetActors(w, r)
+		// default:
+		// 	return WriteJSON(w, http.StatusBadGateway, ApiError{Error: "shit dont exist"})
+		// }
+		// if
 	}
 
 	if r.Method == "POST" {
@@ -55,12 +98,43 @@ func (s *APIServer) handleMovie(w http.ResponseWriter, r *http.Request) error {
 	return fmt.Errorf("method not allowed %s", r.Method)
 }
 
-func (s *APIServer) handleGetMovies(w http.ResponseWriter, r *http.Request) error {
-	return nil
+func (s *APIServer) handleMovieSearch(w http.ResponseWriter, r *http.Request, keyWord string) error {
+	movies, err := s.store.SearchMovie(keyWord)
+	if err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, movies)
+}
+
+func (s *APIServer) handleGetSortedMovies(w http.ResponseWriter, r *http.Request, keyWordSortParam, keyWord string) error {
+	// fmt.Printf("i got invoked with params %s, %s\n", keyWordSortParam, keyWord)
+	movies, err := s.store.GetSortedMovies(keyWordSortParam, keyWord)
+	if err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, movies)
+
+}
+
+func (s *APIServer) handleGetMoviesDefault(w http.ResponseWriter, r *http.Request, keyWordSortParam, keyWord string) error {
+	movies, err := s.store.GetSortedMovies(keyWordSortParam, keyWord)
+	if err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, movies)
 }
 
 func (s *APIServer) handleCreateMovie(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	createMovieReq := new(CreateMovieReq)
+	if err := json.NewDecoder(r.Body).Decode(createMovieReq); err != nil {
+		return err
+	}
+	movie := NewMovie(createMovieReq.Title, createMovieReq.Description, createMovieReq.Rating, createMovieReq.Starring)
+	if err := s.store.CreateMovie(movie); err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, movie)
 }
 
 func (s *APIServer) handleDeleteMovie(w http.ResponseWriter, r *http.Request) error {
@@ -68,7 +142,17 @@ func (s *APIServer) handleDeleteMovie(w http.ResponseWriter, r *http.Request) er
 }
 
 func (s *APIServer) handleUpdateMovie(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	updateReq := new(UpdateMovieReq)
+
+	if err := json.NewDecoder(r.Body).Decode(updateReq); err != nil {
+		return err
+	}
+	// fmt.Println(updateReq, "handle")
+	if err := s.store.UpdateMovie(updateReq); err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, updateReq)
+
 }
 
 func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
@@ -96,7 +180,7 @@ func (s *APIServer) handleActor(w http.ResponseWriter, r *http.Request) error {
 	return fmt.Errorf("method not allowed %s", r.Method)
 }
 
-func (s APIServer) handleCreateActor(w http.ResponseWriter, r *http.Request) error {
+func (s *APIServer) handleCreateActor(w http.ResponseWriter, r *http.Request) error {
 	createAccountReq := new(CreateActorReq)
 	if err := json.NewDecoder(r.Body).Decode(createAccountReq); err != nil {
 		return err
@@ -197,15 +281,26 @@ func (s *APIServer) getActorDeletionCredentials(w http.ResponseWriter, r *http.R
 
 /*
 
-func getId(r *http.Request) (int, error) {
+ */
+
+func getEndpoint(r *http.Request) (string, error) {
 	urlPath := r.URL.Path
 	pathParts := strings.Split(urlPath, "/")
-	idStr := pathParts[len(pathParts)-1]
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		return 0, fmt.Errorf("permission denied: invalid ID '%s'", idStr)
+
+	endpointStr := pathParts[len(pathParts)-1] // this is ok
+
+	// id, err := strconv.Atoi(endpointStr)
+	if endpointStr == "" {
+		return "", fmt.Errorf("permission denied: invalid Endpoint ")
 	}
-	return id, nil
+	return "", fmt.Errorf("permission denied: invalid endpoint ")
 }
 
-*/
+func isEndpointInPath(parts []string, endpoint string) bool {
+	for _, part := range parts {
+		if part == endpoint {
+			return true
+		}
+	}
+	return false
+}

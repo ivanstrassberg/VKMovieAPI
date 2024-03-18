@@ -29,6 +29,7 @@ type Actor struct {
 	LastName    string    `json:"lastName"`
 	Sex         string    `json:"sex"`
 	DateOfBirth time.Time `json:"dateOfBirth"` //DateOfBirth fix the DOB or just make it a string
+	StarringIn  []int     `json:"starringIn"`
 }
 
 ////
@@ -44,17 +45,16 @@ type UpdateMovieReq struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	ReleaseDate time.Time `json:"releaseDate"`
-	Rating      byte      `json:"rating"`
-	// Starring    []*Actor  `json:"starring"`
-
+	Rating      int       `json:"rating"`
+	Starring    []int     `json:"starring"`
 }
 
 type CreateMovieReq struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	ReleaseDate time.Time `json:"releaseDate"`
-	Rating      byte      `json:"rating"`
-	Starring    []*Actor  `json:"starring"`
+	Rating      int       `json:"rating"`
+	Starring    []int     `json:"starring"`
 }
 
 type Movie struct {
@@ -62,13 +62,13 @@ type Movie struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	ReleaseDate time.Time `json:"releaseDate"`
-	Rating      byte      `json:"rating"`
-	Starring    []*Actor  `json:"starring"`
+	Rating      int       `json:"rating"`
+	Starring    []int     `json:"starring"`
 }
 
-// type DateOfBirth struct {
-// 	time.Time
-// }
+type DateFormat struct {
+	time.Time
+}
 
 // func (dob *DateOfBirth) UnmarshalJSON(b []byte) error {
 // 	customLayout := "15-02-2003"
@@ -77,7 +77,6 @@ type Movie struct {
 // 	if err != nil {
 // 		return err
 // 	}
-
 // 	dob.Time = parsedTime
 
 // 	return nil
@@ -92,7 +91,7 @@ func NewActor(firstName, lastName, sex string) *Actor {
 	}
 }
 
-func NewMovie(title, desc string, rating byte, starring []*Actor) *Movie {
+func NewMovie(title, desc string, rating int, starring []int) *Movie {
 	return &Movie{
 		Title:       title,
 		Description: desc,
