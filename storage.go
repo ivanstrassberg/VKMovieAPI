@@ -246,25 +246,35 @@ func (s *PostgresStore) GetSortedMovies(keyWordSortParam, keyWord string) ([]*Mo
 	var query string
 	if keyWordSortParam != " " && keyWord != " " {
 
-		query = fmt.Sprintf("SELECT * FROM movie ORDER BY %s %s;", keyWordSortParam, keyWord)
+		query = fmt.Sprintf("select * from movie ORDER BY %s %s;", keyWordSortParam, keyWord)
 	} else {
-		query = "SELECT * FROM movie ORDER BY rating DESC"
+		query = "select * from movie ORDER BY rating DESC"
 	}
 
 	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
+
 	movies := []*Movie{}
 	for rows.Next() {
 		movie, err := scanIntoMovie(rows)
 		if err != nil {
 			return nil, err
 		}
+
+		for _, actorID := range movie.Starring {
+			actor, err := s.GetActorById(actorID)
+			if err != nil {
+				return nil, err
+			}
+			movie.StarringDetails = append(movie.StarringDetails, actor)
+		}
+
 		movies = append(movies, movie)
 	}
 	return movies, nil
-
 }
 
 func (s *PostgresStore) CreateMovie(movie *Movie) error {
@@ -330,14 +340,14 @@ func (s *PostgresStore) DeleteMovie(id int, title, releaseDate string) error {
 
 func intSliceToArrayLiteral(slice []int) string {
 	var sb strings.Builder
-	sb.WriteByte('{') // Start of the array literal
+	sb.WriteByte('{')
 	for i, v := range slice {
 		if i > 0 {
-			sb.WriteByte(',') // Add comma separator between elements
+			sb.WriteByte(',')
 		}
-		sb.WriteString(strconv.Itoa(v)) // Convert int to string and append to the string builder
+		sb.WriteString(strconv.Itoa(v))
 	}
-	sb.WriteByte('}') // End of the array literal
+	sb.WriteByte('}')
 	return sb.String()
 }
 
@@ -350,5 +360,5 @@ func (s *PostgresStore) GetActorById(id int) (*Actor, error) {
 	for rows.Next() {
 		return scanIntoActor(rows)
 	}
-	return nil, fmt.Errorf("account %d not found", id)
+	return nil, fmt.Errorf("actor %d not found", id)
 }

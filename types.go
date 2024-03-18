@@ -58,12 +58,13 @@ type CreateMovieReq struct {
 }
 
 type Movie struct {
-	ID          int64     `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	ReleaseDate time.Time `json:"releaseDate"`
-	Rating      int       `json:"rating"`
-	Starring    []int     `json:"starring"`
+	ID              int64     `json:"id"`
+	Title           string    `json:"title"`
+	Description     string    `json:"description"`
+	ReleaseDate     time.Time `json:"releaseDate"`
+	Rating          int       `json:"rating"`
+	Starring        []int     `json:"starring"`
+	StarringDetails []*Actor  `json:"starringDetails"`
 }
 
 type DateFormat struct {
