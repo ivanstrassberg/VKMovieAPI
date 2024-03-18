@@ -25,7 +25,9 @@ func (s *APIServer) Run() {
 
 	mux.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin))
 	mux.HandleFunc("/actor", makeHTTPHandleFunc(s.handleActor))
+	mux.HandleFunc("/actor/delete", makeHTTPHandleFunc(s.handleActor))
 	mux.HandleFunc("/movie", makeHTTPHandleFunc(s.handleMovie))
+	mux.HandleFunc("/movie/delete", makeHTTPHandleFunc(s.handleMovie))
 	mux.HandleFunc("/movie/sort", makeHTTPHandleFunc(s.handleMovie))
 	mux.HandleFunc("/movie/search/{byName}", makeHTTPHandleFunc(s.handleMovie))
 	mux.HandleFunc("/movie/sort/{sortParam}/{order}", makeHTTPHandleFunc(s.handleMovie))
@@ -39,12 +41,13 @@ func (s *APIServer) Run() {
 }
 
 func (s *APIServer) handleMovie(w http.ResponseWriter, r *http.Request) error {
+	path := r.URL.Path
+	parts := strings.Split(path, "/")
+	keyWord := parts[len(parts)-1]
+	keyWordSortParam := parts[len(parts)-2]
 
 	if r.Method == "GET" {
-		path := r.URL.Path
-		parts := strings.Split(path, "/")
-		keyWord := parts[len(parts)-1]
-		keyWordSortParam := parts[len(parts)-2]
+
 		if path == "/movie" {
 			return s.handleGetMoviesDefault(w, r, " ", " ")
 		}
@@ -73,7 +76,12 @@ func (s *APIServer) handleMovie(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if r.Method == "DELETE" {
-		return s.handleDeleteMovie(w, r)
+		if path == "/movie/delete" {
+			return s.handleDeleteMovie(w, r)
+		} else {
+			return s.handleDeleteMovieData(w, r)
+		}
+
 	}
 
 	if r.Method == "PUT" {
@@ -81,6 +89,18 @@ func (s *APIServer) handleMovie(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return fmt.Errorf("method not allowed %s", r.Method)
+}
+
+func (s *APIServer) handleDeleteMovieData(w http.ResponseWriter, r *http.Request) error {
+	updateReq := new(UpdateMovieReq)
+	if err := json.NewDecoder(r.Body).Decode(updateReq); err != nil {
+		return err
+	}
+	// fmt.Println(updateReq, "handle")
+	if err := s.store.DeleteMovieData(updateReq); err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, updateReq)
 }
 
 func (s *APIServer) handleMovieSearch(w http.ResponseWriter, r *http.Request, keyWord string) error {
@@ -123,7 +143,20 @@ func (s *APIServer) handleCreateMovie(w http.ResponseWriter, r *http.Request) er
 }
 
 func (s *APIServer) handleDeleteMovie(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	updateMovieReq := new(UpdateMovieReq)
+	if err := json.NewDecoder(r.Body).Decode(updateMovieReq); err != nil {
+		return err
+	}
+
+	if err := s.store.DeleteMovie(int(updateMovieReq.ID)); err != nil {
+		return err
+	}
+	responseData := make(map[string]interface{})
+	if updateMovieReq.ID != 0 {
+		responseData["id"] = int(updateMovieReq.ID)
+	}
+
+	return WriteJSON(w, http.StatusOK, map[string]interface{}{"deleted": responseData})
 }
 
 func (s *APIServer) handleUpdateMovie(w http.ResponseWriter, r *http.Request) error {
@@ -146,6 +179,11 @@ func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 
 func (s *APIServer) handleActor(w http.ResponseWriter, r *http.Request) error {
 
+	path := r.URL.Path
+	// parts := strings.Split(path, "/")
+	// keyWord := parts[len(parts)-1]
+	// keyWordSortParam := parts[len(parts)-2]
+
 	if r.Method == "GET" {
 		return s.handleGetActors(w, r)
 	}
@@ -155,7 +193,12 @@ func (s *APIServer) handleActor(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if r.Method == "DELETE" {
-		return s.handleDeleteActor(w, r)
+		if path == "/actor/delete" {
+			return s.handleDeleteActor(w, r)
+		} else {
+			return s.handleDeleteActorData(w, r)
+		}
+
 	}
 
 	if r.Method == "PUT" {
@@ -165,15 +208,28 @@ func (s *APIServer) handleActor(w http.ResponseWriter, r *http.Request) error {
 	return fmt.Errorf("method not allowed %s", r.Method)
 }
 
+func (s *APIServer) handleDeleteActorData(w http.ResponseWriter, r *http.Request) error {
+	updateReq := new(UpdateActorReq)
+	if err := json.NewDecoder(r.Body).Decode(updateReq); err != nil {
+		return err
+	}
+	// fmt.Println(updateReq, "handle")
+	if err := s.store.DeleteActorData(updateReq); err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, updateReq)
+
+}
+
 func (s *APIServer) handleCreateActor(w http.ResponseWriter, r *http.Request) error {
 	createAccountReq := new(CreateActorReq)
 	if err := json.NewDecoder(r.Body).Decode(createAccountReq); err != nil {
 		return err
 	}
-	if createAccountReq.FirstName == "" || createAccountReq.LastName == "" || createAccountReq.Sex == "" {
+	if createAccountReq.FirstName == "" || createAccountReq.LastName == "" || createAccountReq.Sex == "" || len(createAccountReq.StarringIn) == 0 {
 		return WriteJSON(w, http.StatusBadRequest, ApiError{Error: "parameters missing"})
 	}
-	actor := NewActor(createAccountReq.FirstName, createAccountReq.LastName, createAccountReq.Sex)
+	actor := NewActor(createAccountReq.FirstName, createAccountReq.LastName, createAccountReq.Sex, createAccountReq.StarringIn)
 	if err := s.store.CreateActor(actor); err != nil {
 		return err
 	}
@@ -201,7 +257,7 @@ func (s *APIServer) handleDeleteActor(w http.ResponseWriter, r *http.Request) er
 		return err
 	}
 
-	if err := s.store.DeleteActor(int(credentials.ID), credentials.FirstName, credentials.LastName); err != nil {
+	if err := s.store.DeleteActor(int(credentials.ID)); err != nil {
 		return err
 	}
 

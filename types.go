@@ -14,22 +14,25 @@ type UpdateActorReq struct {
 	LastName  string `json:"lastName"`
 	Sex       string `json:"sex"`
 	// DateOfBirth ??? `json:"dateOfBirth"`
+	StarringIn []int `json:"starringIn"`
 }
 
 type CreateActorReq struct {
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
-	Sex       string `json:"sex"`
+	FirstName  string `json:"firstName"`
+	LastName   string `json:"lastName"`
+	Sex        string `json:"sex"`
+	StarringIn []int  `json:"starringIn"`
 	//DateOfBirth time.Time `json:"dateOfBirth"` dont provide this yet
 }
 
 type Actor struct {
-	ID          int64     `json:"id"`
-	FirstName   string    `json:"firstName"`
-	LastName    string    `json:"lastName"`
-	Sex         string    `json:"sex"`
-	DateOfBirth time.Time `json:"dateOfBirth"` //DateOfBirth fix the DOB or just make it a string
-	StarringIn  []int     `json:"starringIn"`
+	ID                int64     `json:"id"`
+	FirstName         string    `json:"firstName"`
+	LastName          string    `json:"lastName"`
+	Sex               string    `json:"sex"`
+	DateOfBirth       time.Time `json:"dateOfBirth"` //DateOfBirth fix the DOB or just make it a string
+	StarringIn        []int     `json:"starringIn"`
+	StarringInDetails []*Movie  `json:"starringInDetails"`
 }
 
 ////
@@ -83,12 +86,13 @@ type DateFormat struct {
 // 	return nil
 // }
 
-func NewActor(firstName, lastName, sex string) *Actor {
+func NewActor(firstName, lastName, sex string, starringIn []int) *Actor {
 	return &Actor{
 		FirstName:   firstName,
 		LastName:    lastName,
 		Sex:         sex,
 		DateOfBirth: time.Now().UTC(),
+		StarringIn:  starringIn,
 	}
 }
 
