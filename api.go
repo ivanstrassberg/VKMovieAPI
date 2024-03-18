@@ -45,8 +45,8 @@ func (s *APIServer) handleMovie(w http.ResponseWriter, r *http.Request) error {
 		parts := strings.Split(path, "/")
 		keyWord := parts[len(parts)-1]
 		keyWordSortParam := parts[len(parts)-2]
-		if len(parts) == 1 {
-			return s.handleGetSortedMovies(w, r, "", "")
+		if path == "/movie" {
+			return s.handleGetMoviesDefault(w, r, " ", " ")
 		}
 		if isEndpointInPath(parts, "search") {
 			if keyWord != "" {
@@ -66,21 +66,6 @@ func (s *APIServer) handleMovie(w http.ResponseWriter, r *http.Request) error {
 		}
 		return WriteJSON(w, http.StatusBadRequest, ApiError{Error: "something went wrong during sorting"})
 
-		// return s.handleGetSortedMovies(w, r, "", "")
-		// endpoint, err := getEndpoint(r)
-		// fmt.Println(endpoint)
-		// if err != nil {
-		// 	return err
-		// }
-		// switch endpoint {
-		// case "byMovieName":
-		// 	return s.handleGetMovies(w, r)
-		// case "byActorName":
-		// 	return s.handleGetActors(w, r)
-		// default:
-		// 	return WriteJSON(w, http.StatusBadGateway, ApiError{Error: "shit dont exist"})
-		// }
-		// if
 	}
 
 	if r.Method == "POST" {

@@ -290,6 +290,17 @@ func (s *PostgresStore) CreateMovie(movie *Movie) error {
 }
 
 func (s *PostgresStore) UpdateMovie(updateData *UpdateMovieReq) error {
+
+	for _, actorID := range updateData.Starring {
+		actorExists, err := s.actorExists(actorID)
+		if err != nil {
+			return err
+		}
+		if !actorExists {
+			return fmt.Errorf("actor with ID %d does not exist", actorID)
+		}
+	}
+
 	query := "UPDATE movie SET "
 	var params []interface{}
 	var setFields []string
@@ -361,4 +372,16 @@ func (s *PostgresStore) GetActorById(id int) (*Actor, error) {
 		return scanIntoActor(rows)
 	}
 	return nil, fmt.Errorf("actor %d not found", id)
+}
+
+func (s *PostgresStore) actorExists(actorID int) (bool, error) {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM actor WHERE id = $1", actorID).Scan(&count)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, fmt.Errorf("error checking actor existence: %w", err)
+	}
+	return count > 0, nil
 }
