@@ -70,6 +70,18 @@ type Movie struct {
 	StarringDetails []*Actor  `json:"starringDetails"`
 }
 
+type User struct {
+	ID       int    `json:"id"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	IsAdmin  bool   `json:"-"`
+}
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 type DateFormat struct {
 	time.Time
 }
@@ -103,5 +115,12 @@ func NewMovie(title, desc string, rating int, starring []int) *Movie {
 		ReleaseDate: time.Now().UTC(),
 		Rating:      rating,
 		Starring:    starring,
+	}
+}
+
+func NewUser(username string, password string) *User {
+	return &User{
+		Username: username,
+		Password: password,
 	}
 }

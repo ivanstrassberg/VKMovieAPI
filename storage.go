@@ -24,6 +24,8 @@ type Storage interface {
 	GetSortedMovies(string, string) ([]*Movie, error)
 	DeleteMovie(int) error
 	DeleteMovieData(*UpdateMovieReq) error
+
+	CreateUser(*User) error
 }
 
 type PostgresStore struct {
@@ -48,6 +50,7 @@ func NewPostgresStorage() (*PostgresStore, error) {
 func (s *PostgresStore) Init() error {
 	s.createActorTable()
 	s.createMovieTable()
+	s.createUserTable()
 	return nil
 }
 
@@ -79,6 +82,27 @@ func (s *PostgresStore) createMovieTable() error {
 
 	return err
 
+}
+
+func (s *PostgresStore) createUserTable() error {
+	query := `CREATE TABLE IF NOT EXISTS "user" (
+		id SERIAL PRIMARY KEY,
+		username VARCHAR(50),
+		password VARCHAR(50),
+		is_admin BOOLEAN
+	)`
+	_, err := s.db.Exec(query)
+
+	return err
+}
+
+func (s *PostgresStore) CreateUser(user *User) error {
+	query := `INSERT INTO "user" (username, password) VALUES ($1, $2)`
+	_, err := s.db.Exec(query, user.Username, user.Password)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *PostgresStore) CreateActor(act *Actor) error {
@@ -292,10 +316,8 @@ func scanIntoMovie(rows *sql.Rows) (*Movie, error) {
 }
 
 func (s *PostgresStore) SearchMovie(searchQuery string) ([]*Movie, error) {
-	// Split the search query into words
 	searchWords := strings.Fields(searchQuery)
 
-	// Construct the SQL query with LIKE clauses for movie title and actor names
 	query := `
         SELECT DISTINCT m.*
         FROM movie m
@@ -313,14 +335,12 @@ func (s *PostgresStore) SearchMovie(searchQuery string) ([]*Movie, error) {
 		queryParams = append(queryParams, word, word, word)
 	}
 
-	// Execute the query with parameters
 	rows, err := s.db.Query(query, queryParams...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	// Parse the result rows into Movie objects
 	var movies []*Movie
 	for rows.Next() {
 		movie, err := scanIntoMovie(rows)

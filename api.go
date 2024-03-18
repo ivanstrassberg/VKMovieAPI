@@ -174,7 +174,28 @@ func (s *APIServer) handleUpdateMovie(w http.ResponseWriter, r *http.Request) er
 }
 
 func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	if r.Method == "GET" {
+		userLoginReq := new(LoginRequest)
+		if err := json.NewDecoder(r.Body).Decode(userLoginReq); err != nil {
+			return err
+		}
+
+		return WriteJSON(w, http.StatusOK, userLoginReq)
+	}
+	if r.Method == "POST" {
+		userLoginReq := new(LoginRequest)
+		if err := json.NewDecoder(r.Body).Decode(userLoginReq); err != nil {
+			return err
+		}
+		user := NewUser(userLoginReq.Username, userLoginReq.Password)
+		if err := s.store.CreateUser(user); err != nil {
+			return err
+		}
+
+		return WriteJSON(w, http.StatusOK, userLoginReq)
+	}
+	return WriteJSON(w, http.StatusOK, ApiError{Error: "method not supported"})
+
 }
 
 func (s *APIServer) handleActor(w http.ResponseWriter, r *http.Request) error {
